@@ -126,6 +126,12 @@ jobs:
         ./autogen_stubs.sh io_uring
         diff /tmp/libc.py.bak tinygrad/runtime/autogen/libc.py
         diff /tmp/io_uring.py.bak tinygrad/runtime/autogen/io_uring.py
+    - name: check ci cpu
+      run: |
+        echo "CPU Information:"
+        lscpu || sysctl -n machdep.cpu.brand_string
+        echo "Number of CPUs:"
+        nproc || sysctl -n hw.ncpu
 
   uops:
     name: uops tests
