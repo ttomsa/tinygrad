@@ -6,6 +6,10 @@ from tinygrad.dtype import DType, PtrDType
 import struct
 
 arm64_mov_ops = {Ops.STORE: "str", Ops.LOAD: "ldr", Ops.ASSIGN: "str", Ops.DEFINE_ACC: "ldr"}
+arm64_int8_unsigned_mov_ops = {Ops.STORE: "strb", Ops.LOAD: "ldrb", Ops.ASSIGN: "strb", Ops.DEFINE_ACC: "ldrb"}
+arm64_int8_signed_mov_ops = {Ops.STORE: "strb", Ops.LOAD: "ldrsb", Ops.ASSIGN: "strb", Ops.DEFINE_ACC: "ldrsb"}
+arm64_int16_unsigned_mov_ops = {Ops.STORE: "strh", Ops.LOAD: "ldrh", Ops.ASSIGN: "strh", Ops.DEFINE_ACC: "ldrh"}
+arm64_int16_signed_mov_ops = {Ops.STORE: "strh", Ops.LOAD: "ldrsh", Ops.ASSIGN: "strh", Ops.DEFINE_ACC: "ldrsh"}
 arm64_unsigned_ops = {**arm64_mov_ops, Ops.ADD: "add", Ops.SUB: "sub", Ops.MUL: "mul", Ops.IDIV: "udiv", Ops.MOD: "udiv", Ops.CMPNE: "cmp",
                       Ops.CMPLT: "cmn", Ops.AND: "and", Ops.OR: "orr", Ops.XOR: "eor", Ops.SHL: "lsl", Ops.SHR: "lsr"}
 arm64_signed_ops = {**arm64_unsigned_ops, Ops.IDIV: "sdiv", Ops.MOD: "sdiv", Ops.SHR: "asr"}
