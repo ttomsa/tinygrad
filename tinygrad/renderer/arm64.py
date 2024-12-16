@@ -17,6 +17,9 @@ arm64op = {**{x:arm64_unsigned_ops for x in (dtypes.bool,)+dtypes.uints}, **{x:a
 arm64_i_reg_map = {**{f"x{i}": {4: f"w{i}"} for i in range(0,29)}}
 arm64_f_reg_map = {**{f"v{i}": {8: f"d{i}", 4: f"s{i}", 2: f"h{i}", 1: f"b{i}"} for i in range(0,32)}}
 
+arm64_cast = {dtypes.int8: "sxtb", dtypes.uint8: "uxtb", dtypes.int16: "sxth", dtypes.uint16: "uxth", (dtypes.int32, dtypes.float32): "fcvt",
+              (dtypes.float32, dtypes.int32): "fcvtzs", (dtypes.float32, dtypes.uint32): "fcvtzu"}
+
 arm64_rewrite = PatternMatcher([
   (UPat(Ops.INDEX, src=(UPat(), UPat(Ops.CONST)), name="x"), lambda ctx,x: f"add {ctx[x]}, {ctx[x.src[0]]}, {x.src[1].arg*x.src[0].dtype.itemsize}"),
   (UPat(Ops.INDEX, name="x"), lambda ctx,x: f"add {ctx[x]}, {ctx[x.src[0]]}, {ctx[x.src[1]]}, lsl #{x.src[0].dtype.itemsize.bit_length()-1}"),
