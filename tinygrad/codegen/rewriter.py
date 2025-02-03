@@ -4,7 +4,7 @@ import functools, itertools, operator
 from collections import defaultdict
 from tinygrad.dtype import dtypes, ImageDType, PtrDType
 from tinygrad.ops import UOp, Ops, UPat, PatternMatcher, symbolic_flat, symbolic_simple
-from tinygrad.ops import graph_rewrite, split_uop, uop_given_valid, parse_valid, is_increasing, simplify_valid, GroupOp
+from tinygrad.ops import graph_rewrite, graph_rewrite2, split_uop, uop_given_valid, parse_valid, is_increasing, simplify_valid, GroupOp
 from tinygrad.helpers import DEBUG, getenv, flatten, dedup, TRANSCENDENTAL, AMX, prod, partition, all_same
 from tinygrad.codegen.transcendental import xexp2, xlog2, xsin, TRANSCENDENTAL_SUPPORTED_DTYPES
 from tinygrad.renderer import Renderer
@@ -502,15 +502,15 @@ def full_graph_rewrite(sink:UOp, opts:Optional[Renderer]=None) -> UOp:
   extra_matcher = opts.extra_matcher if opts is not None and opts.extra_matcher is not None else PatternMatcher([])
 
   # initial symbolic + migrate indexing (remove this)
-  sink = graph_rewrite(sink, sym+migrate_indexing)
+  sink = graph_rewrite2(sink, sym+migrate_indexing)
 
   # expand
-  sink = graph_rewrite(sink, sym+expander)
+  sink = graph_rewrite2(sink, sym+expander)
 
   # devectorize + load_store_indexing + mulacc_unrolled, mulacc_unrolled must be last because it can break loop_collapse
-  sink = graph_rewrite(sink, sym+(devectorize+float4_folding if opts is not None and opts.supports_float4 else devectorize)+load_store_indexing+
+  sink = graph_rewrite2(sink, sym+(devectorize+float4_folding if opts is not None and opts.supports_float4 else devectorize)+load_store_indexing+
     mulacc_unrolled)
 
   # final rules for the renderer (without sym)
-  sink = graph_rewrite(sink, symbolic_simple+get_late_rewrite_patterns(supported_ops, TRANSCENDENTAL>=2)+pm_render+extra_matcher)
+  sink = graph_rewrite2(sink, symbolic_simple+get_late_rewrite_patterns(supported_ops, TRANSCENDENTAL>=2)+pm_render+extra_matcher)
   return sink
