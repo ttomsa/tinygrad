@@ -916,9 +916,9 @@ def graph_rewrite(sink:UOp, pm:PatternMatcher, ctx=None, bottom_up=False) -> UOp
     tracked_ctxs[-1].append(TrackedGraphRewrite(((frm:=sys._getframe(1)).f_code.co_filename, frm.f_lineno), sink))
   return RewriteContext(pm, ctx).bottom_up_rewrite(sink) if bottom_up else RewriteContext(pm, ctx).top_down_rewrite(sink)
 
-cached_rewrite: dict[PatternMatcher, RewriteContext] = {}
-def graph_rewrite2(sink:UOp, pm:PatternMatcher, ctx=None) -> UOp:
-  return cached_rewrite.setdefault(pm, RewriteContext(pm, ctx)).top_down_rewrite(sink)
+#cached_rewrite: dict[PatternMatcher, RewriteContext] = {}
+#def graph_rewrite2(sink:UOp, pm:PatternMatcher, ctx=None) -> UOp:
+#  return cached_rewrite.setdefault(pm, RewriteContext(pm, ctx)).top_down_rewrite(sink)
 
 def graph_rewrite_map(sink:UOp, pm:PatternMatcher, ctx=None, bottom_up=False) -> dict[UOp, UOp]:
   if TRACK_MATCH_STATS >= 2 and not bottom_up and len(tracked_ctxs) != 0: # TODO: make viz work with bottom_up=True
