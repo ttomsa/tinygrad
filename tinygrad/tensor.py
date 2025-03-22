@@ -3284,6 +3284,7 @@ class Tensor(SimpleMathTrait):
     if not all(resolve(s == ns) or resolve(s == 1) for s,ns in zip(shape, new_shape)):
       raise ValueError(f"cannot broadcast {self.shape} to {new_shape=}")
     #return self.reshape(shape)._apply_uop(UOp.expand, arg=new_shape)
+    if not self.requires_grad: return self.reshape(shape)._apply_uop(UOp.expand, arg=new_shape)
     return self.reshape(shape).cast(sum_acc_dtype(self.dtype))._apply_uop(UOp.expand, arg=new_shape).cast(self.dtype)
 
   def _broadcasted(self, y:Tensor|ConstType|UOp, reverse:bool=False, match_dtype:bool=True) -> tuple[Tensor, Tensor]:
