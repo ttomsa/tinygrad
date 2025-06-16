@@ -914,6 +914,8 @@ jobs:
       - name: fp16 test
         if: matrix.backend == 'llvm'
         run: DEBUG=7 python3 test/unit/test_cpu_fp16_alu.py TestFloat16Alu.test_cpu
+      - name: print cpu info
+        run: sysctl -a | grep machdep.cpu
 
 # ****** Windows Tests ******
 
