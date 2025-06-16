@@ -10,4 +10,6 @@ class TestFloat16Alu(unittest.TestCase):
       a = Tensor([1], dtype=dtypes.float16)
       b = Tensor([2], dtype=dtypes.float16)
       c = (a + b).realize()
-    
+
+if __name__ == "__main__":
+  unittest.main()
