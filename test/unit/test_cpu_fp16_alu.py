@@ -4,7 +4,7 @@ from tinygrad.device import Device
 from tinygrad.helpers import OSX
 
 class TestFloat16Alu(unittest.TestCase):
-  @unittest.skipUnless(Device.DEFAULT == "CPU" and OSX, "")
+  @unittest.skipUnless(Device.DEFAULT == "LLVM" and OSX, "")
   def test_cpu(self):
     a = Tensor([1,2,3,4], dtype=dtypes.float16)
     b = Tensor([1,2,3,4], dtype=dtypes.float16)
