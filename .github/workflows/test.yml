@@ -913,7 +913,7 @@ jobs:
         run: python3 -m pytest test/unit/test_disk_tensor.py::TestDiskTensor::test_copy_to_cpu_not_truncated
       - name: fp16 test
         if: matrix.backend == 'cpu'
-        run: python3 -m pytest test/unit/test_cpu_fp16_alu.py::TestFloat16Alu::test_cpu
+        run: DEBUG=7 python3 test/unit/test_cpu_fp16_alu.py TestFloat16Alu.test_cpu
 
 # ****** Windows Tests ******
 
