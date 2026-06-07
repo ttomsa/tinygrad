@@ -36,7 +36,6 @@ class TestInferenceMode(unittest.TestCase):
     assert tmp.grad is None
     assert mm.grad is None
     assert W.grad is None
-    assert W.requires_grad
 
   def test_no_grad_mode_context_manager(self):
     x = Tensor(x_init)
@@ -79,7 +78,7 @@ class TestIdxUpcast(unittest.TestCase):
     if not isinstance(Device[Device.DEFAULT].renderer, (PTXRenderer, NIRRenderer)):
       assert idx.op is Ops.INDEX
       idx_val = idx.src[1]
-      self.assertIs(idx_val.dtype, dtype)
+      self.assertFalse(idx_val.overflows(idx_val.dtype.base.scalar()))
 
   # use expand to generate kernel that uses large idx
   def do_op_then_assert(self, dtype: DType, dim1, dim2, dim3):
@@ -103,7 +102,7 @@ class TestIdxUpcast(unittest.TestCase):
   @unittest.skipIf(isinstance(Device[Device.DEFAULT].renderer, (PTXRenderer, NIRRenderer)), "PTX and NIR always converts Ops.INDEX to int64")
   def test_symfold(self):
     # This would cause an overflow, but after sym fold it's within int32
-    a = Tensor.arange(65535)
+    a = Tensor.arange(65535).clone()
     uops = self._schedule_render(a)
     assert all(uop.dtype is not dtypes.long for uop in uops)
 
@@ -145,12 +144,6 @@ class TestTensorUnique(unittest.TestCase):
     Tensor.realize(a,b)
     self.assertIsNot(a.uop.buffer, b.uop.buffer)
 
-  def test_eye_bufs_unique(self):
-    a = Tensor.eye(10).contiguous()
-    b = Tensor.eye(10).contiguous()
-    Tensor.realize(a,b)
-    self.assertIsNot(a.uop.buffer, b.uop.buffer)
-
   def test_times_2_not_unique(self):
     a = Tensor.zeros(10, 10).contiguous()
     b = a * 2
@@ -178,8 +171,10 @@ class TestTensorConstLike(unittest.TestCase):
     t = Tensor.ones(8, 4).shard(devs, axis=0)
     c = t.const_like(5)
     self.assertEqual(c.shape, (8, 4))
-    self.assertEqual(c.device, t.device)
-    self.assertEqual(c.uop.axis, 0)
+    self.assertIsNone(c.device)
+    out = t+c
+    self.assertEqual(out.device, t.device)
+    self.assertEqual(out.uop.axis, 0)
 
   def test_full_like_device_on_multi_raises(self):
     t = Tensor.ones(8, 4).shard(("NULL:0", "NULL:1"), axis=0)

@@ -29,7 +29,9 @@ def packed_load(root:UOp, bidx:UOp, dtype:DType, var:UOp|None=None, gate:UOp|Non
 
 def is_packed(dt:DType, odt:DType|None = None) -> bool:
   if odt is None: odt = dt
-  return dt.itemsize < 4 and dt.base != dtypes.half and (not isinstance(odt, PtrDType) or odt.addrspace != AddrSpace.REG)
+  # registers aren't packed
+  if isinstance(odt, PtrDType) and odt.addrspace == AddrSpace.REG: return False
+  return dt.itemsize < 4 and dt.base != dtypes.half
 def _packed_size(dt:PtrDType): return dt.size // (4//dt.itemsize) if is_packed(dt) else dt.size
 
 def is_nan(a):
@@ -86,7 +88,7 @@ class WGSLRenderer(CStyleLanguage):
     (UPat.load(UPat.var("b"), UPat.cvar("v"), UPat.var("gate")),
       lambda ctx,b,v,gate: f"select({ctx[v]}, {ctx.render_load(ctx[b],b.src[0].dtype)}, {ctx[gate]})"),
     (UPat.load(UPat.var("b")), lambda ctx, b: ctx.render_load(ctx[b], b.dtype)),
-    (UPat.store(UPat.var("b"), UPat.var("v"), allow_any_len=True),lambda ctx,b,v:\
+    (UPat.store(UPat.var("b"), UPat.var("v")), lambda ctx,b,v:\
      # (load & mask) | var -> mask = v.src[0].src[1], var = v.src[1]
      f"atomicAnd(&{ctx[b]},{ctx[v.src[0].src[1]]});\n  atomicAdd(&{ctx[b]},{ctx[v.src[1]]});" if is_packed(b.src[0].dtype) \
       else f"{ctx[b]} = {ctx[v]};"),
@@ -94,11 +96,11 @@ class WGSLRenderer(CStyleLanguage):
      lambda ctx,b,idx: f"{ctx[b]}[{strip_parens(ctx[idx]) if idx.arg is Ops.ADD else ctx[idx]}]"),
   ]) + base_rewrite
 
-  def render_cast(self, dt:DType, val: str) -> str: return f"{self.type_map[dt]}({val})"
+  def render_cast(self, u:UOp, val: str) -> str: return f"{self.type_map[u.dtype]}({val})"
   def render_dtype(self, dt:DType, mutable=True) -> str: return "var"
   def render_load(self, x:str, dt:DType) -> str: return f"atomicLoad(&{x})" if is_packed(dt) else x
   def buf_map(self, dt:DType) -> str: return "atomic<u32>" if is_packed(dt) else self.type_map[dt.base]
-  def render_kernel(self, function_name:str, kernel:list[str], bufs:list[tuple[str,tuple[DType,bool]]], uops:list[UOp], prefix=None) -> str:
+  def render_kernel(self, function_name:str, kernel:list[str], bufs:list[tuple[str,tuple[UOp,bool]]], uops:list[UOp], prefix=None) -> str:
     local_size = [u.src[0].ssimplify() for u in sorted([u for u in uops if u.op is Ops.SPECIAL and u.arg[0] == 'l'], key=lambda u: u.arg)]
     if not local_size: local_size = [1]
     bind_it = iter(range(len(bufs)))
@@ -108,10 +110,10 @@ class WGSLRenderer(CStyleLanguage):
     prg += "fn nan() -> f32 { let bits = 0xffffffffu; return bitcast<f32>(bits); }\n"
     prg += "@group(0) @binding(0)\nvar<uniform> INFINITY : f32;\n"
     prg += "\n".join((external_local_bufs or [])+[f"@group(0) @binding({next(bind_it)+1})" +
-      f"{'var<storage,read_write>' if isinstance(dtype, PtrDType) else 'var<uniform>'}" +
-      f"{name}:{f'array<{self.buf_map(dtype.base)}>' if isinstance(dtype,PtrDType) else self.buf_map(dtype)};" for name,(dtype,_) in bufs])
+      f"{'var<storage,read_write>' if u.addrspace == AddrSpace.GLOBAL else 'var<uniform>'}" +
+      f"{name}:{f'array<{self.buf_map(u.dtype.base)}>' if u.addrspace == AddrSpace.GLOBAL else self.buf_map(u.dtype)};" for name,(u,_) in bufs])
     prg += f"\n@compute @workgroup_size({','.join([str(x) for x in local_size])}) fn {function_name}(@builtin(workgroup_id) gindex: vec3<u32>,"
     return prg + "@builtin(local_invocation_id) lindex: vec3<u32>) {\n" + "\n".join(kernel) + "\n}"
 
-  def supported_dtypes(self):
-    return {dtypes.bool, dtypes.char, dtypes.uchar, dtypes.short, dtypes.ushort, dtypes.float, dtypes.int32, dtypes.uint32, dtypes.half}
+  def supported_dtypes(self): return {dtypes.bool, dtypes.char, dtypes.uchar, dtypes.short, dtypes.ushort, dtypes.int32, dtypes.uint32,
+                                      dtypes.float, *((dtypes.half,) if "shader-f16" in self.target.arch else ())}

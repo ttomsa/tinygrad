@@ -4,7 +4,7 @@ inputs:
   python-version:
     description: 'Python version to use'
     required: false
-    default: '3.12'
+    default: '' # if you don't set a version, the native python version will be used
   key:
     description: 'Key for the python cache'
     required: false
@@ -42,7 +42,7 @@ inputs:
     required: false
     default: 'false'
   mesa:
-    description: "Install mesa"
+    description: "Install mesa (true, false, cpu)"
     required: false
     default: 'false'
   tinydreno:
@@ -56,9 +56,22 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Setup environment
+      shell: bash
+      run: |
+        echo "UV_CACHE_DIR=/tmp/.uv-cache" >> "$GITHUB_ENV"
+        echo "OMP_NUM_THREADS=1" >> "$GITHUB_ENV"
+        # no buffers should be over 300MB in CI
+        echo "MAX_BUFFER_SIZE=300000000" >> "$GITHUB_ENV"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+      with:
+        enable-cache: 'false' # see below for manual caching
+
     - name: Set up Python ${{ inputs.python-version }}
-      id: setup-python
       uses: actions/setup-python@v6
+      if: inputs.python-version != ''
       with:
         python-version: ${{ inputs.python-version }}
 
@@ -69,15 +82,15 @@ runs:
       id: restore-venv-pr
       uses: actions/cache/restore@v4
       with:
-        path: ${{ github.workspace }}/.venv
-        key: venv-${{ runner.os }}-${{ runner.arch }}-python-${{ steps.setup-python.outputs.python-version }}-${{ inputs.deps }}-${{ inputs.pydeps }}-${{ env.CACHE_VERSION }}
+        path: /tmp/.uv-cache
+        key: uv-${{ runner.os }}-${{ runner.arch }}-python-${{ inputs.python-version }}-${{ inputs.deps }}-${{ inputs.pydeps }}-${{ env.CACHE_VERSION }}
     - name: Cache Python packages
       if: github.event_name != 'pull_request'
       id: restore-venv
       uses: actions/cache@v5
       with:
-        path: ${{ github.workspace }}/.venv
-        key: venv-${{ runner.os }}-${{ runner.arch }}-python-${{ steps.setup-python.outputs.python-version }}-${{ inputs.deps }}-${{ inputs.pydeps }}-${{ env.CACHE_VERSION }}
+        path: /tmp/.uv-cache
+        key: uv-${{ runner.os }}-${{ runner.arch }}-python-${{ inputs.python-version }}-${{ inputs.deps }}-${{ inputs.pydeps }}-${{ env.CACHE_VERSION }}
 
     # **** Caching downloads ****
 
@@ -97,34 +110,25 @@ runs:
     # **** Python deps ****
 
     - name: Install dependencies in venv (with extra)
-      if: inputs.deps != '' && steps.restore-venv-pr.outputs.cache-hit != 'true' && steps.restore-venv.outputs.cache-hit != 'true'
+      if: inputs.deps != ''
       shell: bash
       run: |
-        python -m venv .venv
-        if [[ "$RUNNER_OS" == "Windows" ]]; then
-          source .venv/Scripts/activate
-        else
-          . .venv/bin/activate
-        fi
-        python -m pip install -e ".[${{ inputs.deps }}]" ${{ inputs.pydeps }} --extra-index-url https://download.pytorch.org/whl/cpu --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/Triton-Nightly/pypi/simple/
+        uv venv .venv
+        uv pip install --python .venv -e ".[${{ inputs.deps }}]" ${{ inputs.pydeps }} --torch-backend cpu --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/Triton-Nightly/pypi/simple/
     - name: Install dependencies in venv (without extra)
-      if: inputs.deps == '' && steps.restore-venv-pr.outputs.cache-hit != 'true' && steps.restore-venv.outputs.cache-hit != 'true'
+      if: inputs.deps == ''
       shell: bash
       run: |
-        python -m venv .venv
-        if [[ "$RUNNER_OS" == "Windows" ]]; then
-          source .venv/Scripts/activate
-        else
-          . .venv/bin/activate
-        fi
-        python -m pip install -e . ${{ inputs.pydeps }}
-    - name: Set up venv environment
+        uv venv .venv
+        uv pip install --python .venv -e . ${{ inputs.pydeps }}
+    - name: Prune uv cache
+      if: github.event_name != 'pull_request'
+      shell: bash
+      run: uv cache prune --ci
+    - name: Configure venv
       shell: bash
       run: |
         echo "VIRTUAL_ENV=${{ github.workspace }}/.venv" >> "$GITHUB_ENV"
-        echo "OMP_NUM_THREADS=1" >> "$GITHUB_ENV"
-        # no buffers should be over 300MB in CI
-        echo "MAX_BUFFER_SIZE=300000000" >> "$GITHUB_ENV"
         if [[ "$RUNNER_OS" == "Windows" ]]; then
           echo "${{ github.workspace }}/.venv/Scripts" >> "$GITHUB_PATH"
         else
@@ -228,6 +232,11 @@ runs:
 
         sudo chown -R $USER:$USER /var/cache/apt/archives/
 
+    - name: Add clang to PATH (Linux)
+      if: inputs.llvm == 'true' && runner.os == 'Linux'
+      shell: bash
+      run: echo "/usr/lib/llvm-20/bin" >> "$GITHUB_PATH"
+
     # **** AMD ****
     - name: Setup AMD (Linux)
       if: inputs.amd == 'true' && runner.os == 'Linux'
@@ -281,7 +290,7 @@ runs:
         cache-name: cache-gpuocelot-build-1
       with:
         path: ${{ github.workspace }}/gpuocelot/ocelot
-        key: ${{ runner.os }}-gpuocelot-b16039dc940dc6bc4ea0a98380495769ff35ed99-rebuild-${{ env.CACHE_VERSION }}
+        key: ${{ runner.os }}-gpuocelot-f463259669c69abce7b3a0567b6c284f348d0f32-rebuild-${{ env.CACHE_VERSION }}
     - name: Cache gpuocelot
       if: inputs.ocelot == 'true' && github.event_name != 'pull_request'
       id: cache-build
@@ -290,26 +299,22 @@ runs:
         cache-name: cache-gpuocelot-build-1
       with:
         path: ${{ github.workspace }}/gpuocelot/ocelot
-        key: ${{ runner.os }}-gpuocelot-b16039dc940dc6bc4ea0a98380495769ff35ed99-rebuild-${{ env.CACHE_VERSION }}
+        key: ${{ runner.os }}-gpuocelot-f463259669c69abce7b3a0567b6c284f348d0f32-rebuild-${{ env.CACHE_VERSION }}
     - name: Clone/compile gpuocelot
       if: inputs.ocelot == 'true' && steps.cache-build-pr.outputs.cache-hit != 'true' && steps.cache-build.outputs.cache-hit != 'true'
       shell: bash
       run: |
-        git clone --recurse-submodules https://github.com/gpuocelot/gpuocelot.git ${{ github.workspace }}/gpuocelot
+        git clone --recurse-submodules https://github.com/tinygrad/gpuocelot.git ${{ github.workspace }}/gpuocelot
         cd ${{ github.workspace }}/gpuocelot/ocelot
-        git checkout b16039dc940dc6bc4ea0a98380495769ff35ed99
+        git checkout f463259669c69abce7b3a0567b6c284f348d0f32
         mkdir build
         cd build
 
         CMAKE_ARGS="-Wno-dev -G Ninja -DOCELOT_BUILD_TOOLS=OFF -DCMAKE_BUILD_ALWAYS=0 -DBUILD_TESTS_CUDA=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
         if [[ "${{ runner.os }}" == "macOS" ]]; then
-          sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
           CMAKE_ARGS="$CMAKE_ARGS -DBoost_INCLUDE_DIR=$(brew --prefix boost)/include -DBoost_LIBRARY_DIR=$(brew --prefix boost)/lib"
         else
-          curl -fL https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-11.5.119-archive.tar.xz \
-            | sudo tar -xJ -C /usr/ --strip-components=1
-          curl -fL https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-11.5.117-archive.tar.xz \
-            | sudo tar -xJ -C /usr/ --strip-components=1
+          CMAKE_ARGS="$CMAKE_ARGS -DLLVM_DIR=$(llvm-config-15 --cmakedir)"
         fi
 
         cmake .. $CMAKE_ARGS
@@ -345,13 +350,13 @@ runs:
 
     # **** mesa ****
     - name: Install mesa (linux)
-      if: inputs.mesa == 'true' && runner.os == 'Linux'
+      if: inputs.mesa != 'false' && runner.os == 'Linux'
       shell: bash
-      run: sudo curl -fL https://github.com/sirhcm/tinymesa/releases/download/v1/libtinymesa_cpu-mesa-25.2.7-linux-amd64.so -o /usr/lib/libtinymesa_cpu.so
+      run: sudo curl -fL https://github.com/sirhcm/tinymesa/releases/download/v1/libtinymesa${{ inputs.mesa == 'cpu' && '_cpu' || '' }}-mesa-25.2.7-linux-amd64.so -o /usr/lib/libtinymesa${{ inputs.mesa == 'cpu' && '_cpu' || '' }}.so
     - name: Install mesa (macOS)
-      if: inputs.mesa == 'true' && runner.os == 'macOS'
+      if: inputs.mesa != 'false' && runner.os == 'macOS'
       shell: bash
-      run: brew install sirhcm/tinymesa/tinymesa_cpu
+      run: brew install sirhcm/tinymesa/tinymesa${{ inputs.mesa == 'cpu' && '_cpu' || '' }}
 
     # *** tinydreno ***
     - name: Install tinydreno (linux)
