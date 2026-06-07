@@ -131,3 +131,9 @@ class AMDLLVMCompiler(LLVMCompiler):
       if "undefined value '@llvm.amdgcn." in str(e): raise CompileError(str(e) + "AMD with LLVM backend requires LLVM >= 18") from e
       raise CompileError(e) from e
   def disassemble(self, lib:bytes): amdgpu_disassemble(lib)
+
+class RDNA3Compiler(Compiler):
+  def __init__(self): super().__init__(None)
+  def compile(self, src:str) -> bytes: return bytes.fromhex(src)
+  def disassemble(self, lib:bytes): amdgpu_disassemble(lib)
+

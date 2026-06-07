@@ -7,7 +7,7 @@ from tinygrad.runtime.support.memory import VirtMapping, AddrSpace, BumpAllocato
 from tinygrad.runtime.support.usb import USB3, CustomASM24Controller, ASM24Controller, USBMMIOInterface
 
 MAP_FIXED, MAP_FIXED_NOREPLACE = 0x10, 0x100000
-MAP_LOCKED, MAP_POPULATE, MAP_NORESERVE = 0 if OSX else 0x2000, getattr(mmap, "MAP_POPULATE", 0 if OSX else 0x008000), 0x400
+MAP_LOCKED, MAP_POPULATE, MAP_NORESERVE = 0 if OSX else 0x2000, getattr(mmap, "MAP_POPULATE", 0 if OSX else 0x008000), 0x4000
 
 class _System:
   def write_sysfs(self, path:str, value:str, msg:str, expected:str|None=None):

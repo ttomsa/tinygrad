@@ -1274,9 +1274,14 @@ def deconstruct_function(fxn:Callable) -> tuple:
   ret = fxn.__code__, new_globals, fxn.__name__, fxn.__defaults__
   return pickle.loads(pickle.dumps(ret)) if getenv("TEST_PICKLE") else ret
 
+def reconstruct_function(fxn:Callable):
+  if isinstance(fxn, functools.partial):
+    return functools.partial(types.FunctionType(*deconstruct_function(fxn.func)), *fxn.args, **(fxn.keywords or {}))
+  return types.FunctionType(*deconstruct_function(fxn))
+
 @functools.cache
 def upat_interpret(p:UPat, fxn:Callable) -> Callable:
-  real_fxn = types.FunctionType(*deconstruct_function(fxn))
+  real_fxn = reconstruct_function(fxn)
   if 'ctx' in inspect.signature(real_fxn).parameters:
     def universal_match(uop, ctx):
       for match in p.match(uop, {}):
