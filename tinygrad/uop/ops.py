@@ -287,7 +287,7 @@ class UOp(OpMixin, metaclass=UOpMetaClass):
       case Ops.STAGE:
         # STAGE adds the existing shape to the front, opposite of INDEX
         return tuple([int(r.vmax+1) for r in self.src[1:]])+self.src[0].shape
-      case Ops.DEFINE_LOCAL | Ops.DEFINE_REG:
+      case Ops.DEFINE_LOCAL | Ops.DEFINE_PRIVATE | Ops.DEFINE_REG:
         if len(self.src) >= 1:
           # NOTE: this is the same as PARAM
           return tuple(self.src[0].sgep(i) for i in range(self.src[0].dtype.count))
@@ -601,7 +601,6 @@ class UOp(OpMixin, metaclass=UOpMetaClass):
 
   @property
   def reg(self:UOp):
-    # TODO: add a way to access the nth element in src
     if self.op in (Ops.NOOP, Ops.AFTER) and self.src: return self.src[0].reg
     if isinstance(self.tag, tuple): return self.tag[0]
     return self.tag

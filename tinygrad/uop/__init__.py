@@ -19,8 +19,14 @@ class Ops(FastEnum):
   # this is a RANGE for GPU dimensions, similar to symbolic shapes but not exactly
   SPECIAL = auto()
 
-  # define LOCAL/REG allocate things
-  DEFINE_LOCAL = auto(); DEFINE_REG = auto()
+  # define LOCAL is a local(amd)/shared(nvidia) memory allocation, this is GPU specific
+  DEFINE_LOCAL = auto()
+
+  # define PRIVATE is a stack(cpu)/scratch(amd)/local(nvidia) allocation
+  DEFINE_PRIVATE = auto()
+
+  # define REG is a register definition
+  DEFINE_REG = auto()
 
   # ** 2 -- non op uops **
 
@@ -122,7 +128,7 @@ class GroupOp:
   # TODO: is BITCAST always Elementwise if it's shape changing?
   Elementwise = set.union(ALU, {Ops.CAST, Ops.BITCAST})
 
-  Defines = {Ops.PARAM, Ops.DEFINE_LOCAL, Ops.DEFINE_REG}
+  Defines = {Ops.PARAM, Ops.DEFINE_LOCAL, Ops.DEFINE_PRIVATE, Ops.DEFINE_REG}
 
   Irreducible = {Ops.CONST, Ops.DEFINE_VAR, Ops.SPECIAL, Ops.RANGE}
   Movement = {Ops.RESHAPE, Ops.EXPAND, Ops.PERMUTE, Ops.PAD, Ops.SHRINK, Ops.FLIP}

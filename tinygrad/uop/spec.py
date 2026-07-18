@@ -8,6 +8,7 @@ from tinygrad.helpers import DEBUG, Context, prod, SPEC, Metadata, panic, CHECK_
 # ***** uop helpers *****
 
 def validate_index(uidx:UOp, gate:UOp|None=None):
+  print("FUCK OYU")
   if len(uidx.src) != 2: return True  # skip for non final index. TODO: check more complex index with shape
   buf,idx = uidx.src
   if idx.op is Ops.CONST and idx.arg is Invalid: return True

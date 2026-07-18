@@ -5,7 +5,7 @@ from typing import cast
 from tinygrad.dtype import dtypes, PtrDType, DType, truncate, AddrSpace
 from tinygrad.uop import FastEnum, auto, Ops, GroupOp
 from tinygrad.uop.ops import UOp, UPat, PatternMatcher
-from tinygrad.renderer.isa import ISARenderer, IselContext, Register, PreRegAllocContext
+from tinygrad.renderer.isa import ISARenderer, IselContext, Register, FlagRematContext
 from tinygrad.helpers import getenv, CPU_COUNT, unwrap, Target
 
 # ***** X86 Ops *****
@@ -586,7 +586,7 @@ isel_matcher = PatternMatcher([
 # this handles flag clobbers. Unfortunately x86 doesn't have a good way to store/restore the flag register (then regalloc would handle it)
 # so we rematerialize. This is different from rematerialization you might want to do in regalloc because it is not optional,
 # regalloc shouldn't rematerialize if a src of the instruction is dead, but here you need to as there's no fallback load from stack
-def flag_rematerialize(ctx:PreRegAllocContext, x:UOp):
+def flag_rematerialize(ctx:FlagRematContext, x:UOp):
   flag_def = x if x.arg in X86GroupOp.WriteFlags or x.op in (Ops.RANGE, Ops.END) else x.src[-1] if x.arg in X86GroupOp.ReadFlags else None
   if flag_def is None: return None
   if ctx.lock is not None and ctx.lock is not flag_def: ctx.clobbered.add(ctx.lock)
@@ -595,9 +595,7 @@ def flag_rematerialize(ctx:PreRegAllocContext, x:UOp):
   ctx.clobbered.remove(flag_def)
   return (x, [flag_def, x])
 
-pre_regalloc_matcher = PatternMatcher([
-  (UPat((Ops.INS, Ops.RANGE, Ops.END), name="x"), flag_rematerialize),
-])
+flag_remat_matcher = PatternMatcher([(UPat((Ops.INS, Ops.RANGE, Ops.END), name="x"), flag_rematerialize)])
 
 # ***** post register allocation *****
 # TODO: control flow should be overhauled so that this isn't necessary
@@ -833,14 +831,14 @@ class X86Renderer(ISARenderer):
   extra_matcher = extra_matcher
   pre_isel_matcher = pre_isel_matcher
   isel_matcher = isel_matcher
-  pre_regalloc_matcher = pre_regalloc_matcher
+  flag_remat_matcher = flag_remat_matcher
   post_regalloc_matcher = post_regalloc_matcher
   code_for_op = {x: lambda: None for x in (Ops.SQRT, Ops.AND, Ops.OR, Ops.SHL, Ops.SHR, Ops.NEG, Ops.SUB, Ops.FDIV, Ops.CMPLT, Ops.CMPEQ)}
   def __init__(self, target:Target):
     super().__init__(target)
     from tinygrad.runtime.support.compiler_cpu import X86Compiler
     self.compiler = X86Compiler()
-  def is_two_address(self, x:UOp) -> bool: return x.arg in X86GroupOp.TwoAddress
+  def two_address(self, x:UOp) -> int: return 0 if x.arg in X86GroupOp.TwoAddress else -1
   def stack_pointer(self) -> UOp: return def_reg(dtypes.uint64, RSP)
   # nasty hacks to deal with pointers TODO: rm pointers
   def copy(self, x:UOp, reg:Register):
